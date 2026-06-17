@@ -118,8 +118,6 @@ The application is designed to handle 100,000+ translation records efficiently.
 ### CDN Support
 ```
 Export responses include standard cache headers (ETag, Last-Modified, and Cache-Control) making them compatible with CDNs such as Cloudflare, CloudFront, or Fastly.
-
-This allows cached responses to be revalidated efficiently while ensuring clients always receive the latest translation data.
 ```
 
 ### Code structure
