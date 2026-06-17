@@ -1,0 +1,428 @@
+openapi: 3.0.3
+info:
+  title: DigitalTolk TMS API
+  version: "1.0"
+  description: |
+    Small API for managing translations across locales, with tags for
+    context (mobile/desktop/web/etc) uses authentication via bearer tokens.
+    /api/translations/export/{locale} is intentionally public so a CDN can pull it.
+
+# servers:
+#   - url: http://localhost:8080   # docker
+#   - url: http://localhost:8000   # artisan serve
+
+tags:
+  - name: Auth
+  - name: Translations
+  - name: Languages
+  - name: Tags
+  - name: Export
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    Language:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        code: { type: string, example: en }
+        name: { type: string, example: English }
+        is_active: { type: boolean }
+
+    Tag:
+      type: object
+      properties:
+        id: { type: integer, example: 7 }
+        name: { type: string, example: mobile }
+
+    Translation:
+      type: object
+      properties:
+        id: { type: integer, example: 42 }
+        key: { type: string, example: home.title }
+        content: { type: string, example: Welcome }
+        language:
+          type: object
+          properties:
+            id: { type: integer }
+            code: { type: string }
+            name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+          example: [mobile, web]
+        updated_at: { type: string, format: date-time }
+
+    TranslationWrite:
+      type: object
+      required: [language_id, key, content]
+      properties:
+        language_id: { type: integer, example: 1 }
+        key: { type: string, maxLength: 191, example: home.title }
+        content: { type: string, example: "Welcome to TMS" }
+        tags:
+          type: array
+          items: { type: string }
+          example: [web, mobile]
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string, example: "The given data was invalid." }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+
+  responses:
+    Unauthorized:
+      description: missing / invalid token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, example: Alice }
+                email: { type: string, format: email, example: alice@example.com }
+                password: { type: string, format: password, minLength: 8, example: password123 }
+      responses:
+        '201':
+          description: user created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      email: { type: string }
+                  token: { type: string }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: login, returns a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: 'alice@example.com' }
+                password: { type: string, format: password, example: password123 }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: revoke current token
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Logged out." }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/languages:
+    get:
+      tags: [Languages]
+      summary: list languages
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Language' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Languages]
+      summary: add a language
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code: { type: string, maxLength: 10, example: de }
+                name: { type: string, example: German }
+                is_active: { type: boolean }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Language' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /api/tags:
+    get:
+      tags: [Tags]
+      summary: list tags
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Tags]
+      summary: add a tag
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 64, example: mobile }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /api/translations:
+    get:
+      tags: [Translations]
+      summary: search translations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: locale,  schema: { type: string, example: en } }
+        - { in: query, name: key,     schema: { type: string, example: home. } }
+        - { in: query, name: content, schema: { type: string } }
+        - { in: query, name: tag,     schema: { type: string, example: mobile } }
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Translation' }
+                  meta: { type: object }
+                  links: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    post:
+      tags: [Translations]
+      summary: create
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TranslationWrite' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Translation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /api/translations/{translation}:
+    parameters:
+      - { in: path, name: translation, required: true, schema: { type: integer } }
+
+    get:
+      tags: [Translations]
+      summary: show
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Translation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    # PUT + PATCH hit the same controller action
+    put:
+      tags: [Translations]
+      summary: update (full)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TranslationWrite' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Translation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+    patch:
+      tags: [Translations]
+      summary: update (partial)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                language_id: { type: integer }
+                key: { type: string, maxLength: 191 }
+                content: { type: string }
+                tags:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200': { description: ok }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    delete:
+      tags: [Translations]
+      summary: delete
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: no content }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/translations/export/{locale}:
+    get:
+      tags: [Export]
+      summary: JSON export for a locale
+      description: |
+        Returns a flat `{ key: content }` map. Streamed, so it's fine
+        with 100k+ rows. ETag + Last-Modified are set; send
+        If-None-Match to get a 304. Cache-Control is
+        `public, max-age=0, must-revalidate` so the CDN can cache
+        and revalidate.
+      parameters:
+        - { in: path, name: locale, required: true, schema: { type: string, example: en } }
+        - in: query
+          name: tags
+          description: comma-separated tag names
+          schema: { type: string, example: "mobile,web" }
+        - in: header
+          name: If-None-Match
+          schema: { type: string }
+      responses:
+        '200':
+          description: translations map
+          headers:
+            ETag: { schema: { type: string } }
+            Last-Modified: { schema: { type: string } }
+            Cache-Control:
+              schema: { type: string, example: "public, max-age=0, must-revalidate" }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+                example:
+                  home.title: Welcome
+                  home.subtitle: Glad to have you here
+        '304':
+          description: not modified
+
