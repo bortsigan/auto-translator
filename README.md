@@ -89,6 +89,62 @@ GET /api/translations/export/{locale}
 ```
 
 
+## 5. Design choices
+
+### Schema (scalable)
+```
+Database Schema
+
+The database is designed to support large datasets and efficient searching.
+
+languages stores supported locales like en, fr, es and can be extended without code changes.
+translations stores translation keys and values per language.
+tags and the tag_translation pivot table allow translations to be grouped by context like web, mobile, desktop.
+
+Indexes are added to support fast lookups by language, key, and update time. 
+MySQL Full Text indexes are used for content searches when available.
+```
+
+### Performance
+```
+The application is designed to handle 100,000+ translation records efficiently.
+
+1. Database indexes are used for common search operations.
+2. Search results are paginated to avoid loading large datasets into memory.
+3. Translation exports are streamed using chunkById() to keep memory usage low.
+4. Export responses support ETag-based validation, allowing users and CDNs to avoid downloading unchanged data.
+```
+
+### CDN Support
+```
+Export responses include standard cache headers (ETag, Last-Modified, and Cache-Control) making them compatible with CDNs such as Cloudflare, CloudFront, or Fastly.
+
+This allows cached responses to be revalidated efficiently while ensuring clients always receive the latest translation data.
+```
+
+### Code structure
+
+```
+The application follows SOLID principles and keeps responsibilities separated:
+
+1. Controllers handle HTTP requests and responses.
+2. Services contain business logic.
+3. Form Requests handle validation.
+4. API Resources transform models into response payloads.
+```
+
+### Security
+
+```
+1. API access is protected using bearer tokens.
+2. Tokens are stored as SHA256 hashes instead of using plain text.
+3. All input is validated before processing.
+4. Uses queries and Eloquent ORM to prevent SQL injections.
+5. API responses return generic error messages and do not expose internal system details.
+```
+
+
+
 ### FYI
 ```bash
 # if you already executed | run the command
