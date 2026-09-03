@@ -1,4 +1,4 @@
-# DigitalTolk
+# Auto Translator
 
 ---
 
